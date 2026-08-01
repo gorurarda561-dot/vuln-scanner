@@ -12,6 +12,8 @@ Kullanım:
     python main.py --target 192.168.56.10
     python main.py --target example.com --web
     python main.py --target 192.168.56.10 --ports 21,22,80,443
+    python main.py --target 192.168.56.10 --web --dir-scan
+    python main.py --target 192.168.56.10 --dir-scan --wordlist wordlists/common.txt --extensions php,bak
 """
 
 import argparse
@@ -24,6 +26,7 @@ from modules.port_scanner import scan_ports, resolve_target, DEFAULT_PORTS
 from modules.banner_grabber import get_service_info
 from modules.cve_lookup import lookup_services
 from modules.web_scanner import run_web_scan
+from modules.dir_bruteforce import brute_force as run_dir_bruteforce
 from modules.report_generator import generate_html_report, generate_json_report
 
 console = Console()
@@ -37,6 +40,22 @@ def parse_args():
     parser.add_argument("--ports", help="Virgülle ayrılmış port listesi (varsayılan: yaygın portlar)")
     parser.add_argument("--web", action="store_true", help="Web güvenlik kontrollerini de çalıştır")
     parser.add_argument("--no-cve", action="store_true", help="CVE aramasını atla (daha hızlı tarama)")
+    parser.add_argument(
+        "--dir-scan", action="store_true",
+        help="Wordlist tabanlı dizin/dosya keşfi yap (dirb/gobuster benzeri)"
+    )
+    parser.add_argument(
+        "--wordlist", default="wordlists/common.txt",
+        help="Dizin taraması için kullanılacak wordlist dosyası (varsayılan: wordlists/common.txt)"
+    )
+    parser.add_argument(
+        "--extensions", default="",
+        help="Dizin taramasında denenecek ek uzantılar, virgülle ayrılmış (örn. php,bak,zip)"
+    )
+    parser.add_argument(
+        "--dir-threads", type=int, default=20,
+        help="Dizin taraması için paralel thread sayısı (varsayılan: 20)"
+    )
     parser.add_argument("--output", default="report", help="Rapor dosya adı (uzantısız)")
     return parser.parse_args()
 
@@ -93,18 +112,50 @@ def main():
                 cve_table.add_column("Port", style="cyan")
                 cve_table.add_column("CVE ID", style="red")
                 cve_table.add_column("Önem", style="yellow")
+                cve_table.add_column("Halka Açık Exploit", style="magenta")
                 for port, cves in cve_findings.items():
                     for cve in cves:
-                        cve_table.add_row(str(port), cve["id"], cve["severity"])
+                        exploit_flag = "⚠ Var" if cve.get("has_public_exploit") else "-"
+                        cve_table.add_row(str(port), cve["id"], cve["severity"], exploit_flag)
                 console.print(cve_table)
+
+                # Halka açık exploiti olan CVE'ler için linkleri ayrıca listele
+                any_exploit = any(
+                    cve.get("has_public_exploit") for cves in cve_findings.values() for cve in cves
+                )
+                if any_exploit:
+                    console.print("\n[bold magenta]Halka Açık Exploit Referansları:[/bold magenta]")
+                    for cves in cve_findings.values():
+                        for cve in cves:
+                            if cve.get("has_public_exploit"):
+                                console.print(f"  [red]{cve['id']}[/red] ({cve['severity']}):")
+                                for ref in cve["exploit_refs"]:
+                                    console.print(f"    - {ref}")
+                    console.print(
+                        "\n[dim]Not: Bu linkler NVD'nin kamuya açık kaynaklarıdır, "
+                        "yalnızca izinli/kendi sistemlerinde doğrulama amaçlı kullan.[/dim]"
+                    )
             else:
                 console.print("[yellow]Bilinen CVE bulunamadı (veya versiyon tespit edilemedi).[/yellow]")
 
     # --- Web Taraması ---
     web_results = {"missing_headers": {}, "exposed_paths": []}
+    dir_scan_results = []
+    target_url = None
+
+    if args.web or args.dir_scan:
+        # Hangi portun web arayüzü olduğunu belirle: önce bilinen web
+        # portlarını (443/8443/80/8080) tercih et, yoksa açık ilk portu kullan.
+        web_port_priority = [443, 8443, 80, 8080]
+        web_port = next((p for p in web_port_priority if p in open_ports), None)
+        if web_port is None and open_ports:
+            web_port = open_ports[0]
+
+        protocol = "https" if web_port in (443, 8443) else "http"
+        port_suffix = "" if web_port in (80, 443, None) else f":{web_port}"
+        target_url = f"{protocol}://{args.target}{port_suffix}"
+
     if args.web:
-        protocol = "https" if 443 in open_ports or 8443 in open_ports else "http"
-        target_url = f"{protocol}://{args.target}"
         console.print(f"\n[bold]Web taraması başlatılıyor:[/bold] {target_url}")
 
         with console.status("[bold green]Web güvenlik kontrolleri yapılıyor..."):
@@ -126,11 +177,37 @@ def main():
                 p_table.add_row(item["path"], str(item["status"]))
             console.print(p_table)
 
+    # --- Wordlist Tabanlı Dizin/Dosya Taraması ---
+    if args.dir_scan:
+        extensions = [e.strip() for e in args.extensions.split(",") if e.strip()] or None
+        console.print(f"\n[bold]Dizin/dosya taraması başlatılıyor:[/bold] {target_url}")
+        console.print(f"[dim]Wordlist: {args.wordlist}[/dim]")
+
+        try:
+            with console.status("[bold green]Wordlist ile dizinler/dosyalar deneniyor..."):
+                dir_scan_results = run_dir_bruteforce(
+                    target_url, args.wordlist, extensions=extensions, max_workers=args.dir_threads
+                )
+        except FileNotFoundError as e:
+            console.print(f"[bold red]Hata:[/bold red] {e}")
+            dir_scan_results = []
+
+        if dir_scan_results:
+            d_table = Table(title=f"Bulunan Yollar ({len(dir_scan_results)})")
+            d_table.add_column("Yol", style="red")
+            d_table.add_column("Durum Kodu", style="yellow")
+            d_table.add_column("Boyut (byte)", style="cyan")
+            for item in dir_scan_results:
+                d_table.add_row(item["path"], str(item["status"]), str(item["content_length"]))
+            console.print(d_table)
+        else:
+            console.print("[yellow]Wordlist taramasında ilginç bir yol bulunamadı.[/yellow]")
+
     # --- Rapor Oluşturma ---
     html_path = f"{args.output}.html"
     json_path = f"{args.output}.json"
-    generate_html_report(args.target, services, cve_findings, web_results, html_path)
-    generate_json_report(args.target, services, cve_findings, web_results, json_path)
+    generate_html_report(args.target, services, cve_findings, web_results, html_path, dir_scan_results)
+    generate_json_report(args.target, services, cve_findings, web_results, json_path, dir_scan_results)
 
     console.print(f"\n[bold green]Rapor oluşturuldu:[/bold green] {html_path}, {json_path}")
 
