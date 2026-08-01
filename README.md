@@ -1,11 +1,11 @@
 # Vuln Scanner
 
-Basit, modüler bir **ağ + web zafiyet tarayıcısı**. Python ile yazılmıştır ve
-port tarama, servis/versiyon tespiti, NVD üzerinden CVE eşleştirme ve temel
+Basit, modüler bir **ağ + web zafiyet tarayıcısı**. Python ile yazılmıştır.
+Port tarama, servis/versiyon tespiti, NVD üzerinden CVE eşleştirme ve temel
 web güvenlik kontrollerini tek bir araçta birleştirir.
 
 > **UYARI:** Bu araç yalnızca **kendi sahip olduğun sistemlerde** veya
-> **yazılı izin aldığın test ortamlarında** kullanılmalıdır. 
+> **yazılı izin aldığınız test ortamlarında** kullanılmalıdır. 
 > İzinsiz sistemlerde tarama yapmak birçok ülkede suçtur. Bu proje yalnızca eğitim amaçlıdır.
 
 ## Özellikler
@@ -31,7 +31,7 @@ pip install -r requirements.txt
 
 Temel port ve CVE taraması:
 ```bash
-python main.py --target 192.168.56.10
+python main.py --target target-ip
 ```
 
 Web güvenlik kontrolleriyle birlikte:
@@ -68,27 +68,16 @@ python main.py --help
 
 ```
 vuln-scanner/
-├── main.py                    # CLI giriş noktası
+├── main.py                    
 ├── modules/
-│   ├── port_scanner.py        # Port tarama
-│   ├── banner_grabber.py      # Servis/versiyon tespiti
-│   ├── cve_lookup.py          # NVD API ile CVE eşleştirme (CPE tabanlı)
-│   ├── web_scanner.py         # Web güvenlik kontrolleri
-│   ├── dir_bruteforce.py      # Wordlist tabanlı dizin/dosya keşfi
-│   └── report_generator.py    # HTML/JSON rapor oluşturma
+│   ├── port_scanner.py        
+│   ├── banner_grabber.py      
+│   ├── cve_lookup.py          
+│   ├── web_scanner.py         
+│   ├── dir_bruteforce.py      
+│   └── report_generator.py    
 ├── wordlists/
-│   └── common.txt             # Varsayılan dizin/dosya wordlist'i
+│   └── common.txt             
 ├── requirements.txt
 └── README.md
 ```
-
-## Yol Haritası
-
-- [ ] Async I/O ile port taramayı hızlandırma
-- [ ] Daha kapsamlı web zafiyet testleri (basit XSS/SQLi tespiti)
-- [ ] SSL/TLS yapılandırma kontrolü (zayıf cipher tespiti)
-- [ ] Docker ile paketleme
-
-## Lisans
-
-MIT
