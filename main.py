@@ -64,7 +64,6 @@ def print_banner():
     console.print("[bold cyan]" + "=" * 50 + "[/bold cyan]")
     console.print("[bold cyan]   VULN SCANNER - Ağ + Web Zafiyet Tarayıcısı[/bold cyan]")
     console.print("[bold cyan]" + "=" * 50 + "[/bold cyan]")
-    console.print("[yellow]Uyarı: Yalnızca izinli hedeflerde kullanın![/yellow]\n")
 
 
 def main():
@@ -133,7 +132,6 @@ def main():
                                     console.print(f"    - {ref}")
                     console.print(
                         "\n[dim]Not: Bu linkler NVD'nin kamuya açık kaynaklarıdır, "
-                        "yalnızca izinli/kendi sistemlerinde doğrulama amaçlı kullan.[/dim]"
                     )
             else:
                 console.print("[yellow]Bilinen CVE bulunamadı (veya versiyon tespit edilemedi).[/yellow]")
