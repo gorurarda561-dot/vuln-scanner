@@ -34,7 +34,7 @@ console = Console()
 
 def parse_args():
     parser = argparse.ArgumentParser(
-        description="Basit Ağ + Web Zafiyet Tarayıcısı (yalnızca izinli hedeflerde kullanın)"
+        description="Basit Ağ + Web Zafiyet Tarayıcısı"
     )
     parser.add_argument("--target", required=True, help="Hedef IP adresi veya domain")
     parser.add_argument("--ports", help="Virgülle ayrılmış port listesi (varsayılan: yaygın portlar)")
